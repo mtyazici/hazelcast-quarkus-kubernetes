@@ -41,8 +41,7 @@ public class CommandController {
     @Path("/get")
     @Produces(MediaType.APPLICATION_JSON)
     public CommandResponse get(@QueryParam("key") String key) {
-        System.out.println("CommandController key:" +key);
-        String value = "";//retrieveMap().get(key);
+        String value = retrieveMap().get(key);
         return new CommandResponse(value,podName);
     }
 

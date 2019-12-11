@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: hazelcast-client
-          image: quarkus-quickstart/getting-started:3.0
+          image: mesut/hazelcast-quarkus-kubernetes
           imagePullPolicy: IfNotPresent
           ports:
           - containerPort: 5701
@@ -30,7 +30,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: springboot-service
+  name: quarkus-service
 spec:
   type: ClusterIP
   selector:
