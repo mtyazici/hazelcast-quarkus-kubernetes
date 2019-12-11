@@ -16,7 +16,7 @@ spec:
       containers:
         - name: hazelcast-client
           image: mesut/hazelcast-quarkus-kubernetes
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           ports:
           - containerPort: 5701
           env:
