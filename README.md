@@ -1,88 +1,95 @@
+# Hazelcast and Quarkus
 
-# RUNNING FROM JAR 
+This guide helps you start with Hazelcast in Quarkus based Microservice and deploy to Kubernetes. 
+Feel free to fork and experiment on your own
 
-## Package the app
-> $ mvn clean package   
+## Requirements
 
-## Create Hazelcast Instance
-> $ mvn exec:java -Dexec.mainClass=org.acme.quickstart.HzInstance
-
-Note the ip and port of the instance here (e.g. 10.216.1.29:5701)
-
-## Run Quarkus App
-> $ java -jar target/getting-started-1.0-SNAPSHOT-runner.jar   
- 
-## Request to App
-After sending the request below, go back to Quarkus tab and enter the address of the instance there. The response will then be returned to the curl request.
-
-> $ curl "localhost:8080/map/put?key=key_1&value=value_1"   
-(on Quarkus tab) Enter cluster address: 10.216.1.29:5701
-
-## Get the value from IMap
-> $ curl "localhost:8080/map/get?key=key_1"   
-
-
-# BUILDING NATIVE IMAGE
-See prerequisites here: https://quarkus.io/guides/building-native-image-guide    
-Docker must be running.
-
---------
-
-> $ mvn package -Pnative -Dnative-image.docker-build=true
-
-------------------------------------
-
-# Dockerfile content:
-
-Dockerfile.native
-
+### Kubernetes Cluster
+In this guide, I used a Google Kubernetes Engine but you can use any Kubernetes cluster you choose.
 ```
-FROM registry.access.redhat.com/ubi8/ubi-minimal
-WORKDIR /work/
-COPY target/*-runner /work/application
-RUN chmod 775 /work
-EXPOSE 8080
-CMD ["./application", "-Dquarkus.http.host=0.0.0.0"]
+$ gcloud container clusters create hazelcast-quarkus-k8s-cluster --cluster-version=1.14.8-gke.12 --num-nodes=4
 ```
 
+### Hazelcast RBAC 
 
-# RUNNING IN CONTAINER
-First, start Hazelcast Cluster in container:
-> $ docker run -p 5701:5701 hazelcast/hazelcast:3.12.1
-> $ docker run -p 5702:5701 hazelcast/hazelcast:3.12.1
+RBAC is needed by [hazelcast-kubernetes](https://github.com/hazelcast/hazelcast-kubernetes) plugin discovery.
+```
+$ kubectl apply -f rbac.yaml
+```
 
-Start Quarkus App:
-> $ docker build -f Dockerfile.native -t quarkus-quickstart/getting-started .   
-> $ docker run -i -p 8080:8080 quarkus-quickstart/getting-started
+## Hazelcast-Quarkus Code Sample
 
-Make a request:
-> $ curl "localhost:8080/map/get?key=1"
+This guide contains a basic Quarkus Microservice with Hazelcast Client Server Topology. 
+Business Logic in both examples are the same to keep it simple. `put` operation puts a key-value pair to Hazelcast and `get` operation returns the value together with the Kubernetes Pod Name. PodName is used to show that the value is returned from any Pod inside the Kubernetes cluster to prove the true nature of Distributed Cache.
 
-Navigate back to the terminal tab where Quarkus is running. It will prompt for an IP adress which is the client's networking IP. Enter the cluster IP (seen on Hazelcast Cluster log) there.
-> Enter networking address: 172.17.0.3:5701
+### Hazelcast Client Server
 
-Now check the `curl` tab and see the response, which must be `null` since no value has been put yet.
-So Hazelcast Client in native-image works properly when the configurations below which cause build time error are set in pom.xml :
+Client-Server code sample can be built and pushed to your own Docker Hub or some other registry via following command but that is optional.
+If you decide to build your own image then you should update `hazelcast-quarkus-client.yaml` file with `YOUR-NAME/hazelcast-quarkus-kubernetes` as a new image.
+```
+$ docker build . -t YOUR-NAME/hazelcast-quarkus-kubernetes
+$ docker login
+$ docker push YOUR-NAME/hazelcast-quarkus-kubernetes
+```
+Pre-built image used in this guide is located [here](https://hub.docker.com/r/mesut/hazelcast-quarkus-kubernetes)
+
+Deploy Hazelcast Cluster
+```
+kubectl apply -f hazelcast-cluster.yaml
+```
+
+You can see that 3 member cluster has been initiated with 3 pods.
 
 ```
-<plugin>
-  <groupId>io.quarkus</groupId>
-  <artifactId>quarkus-maven-plugin</artifactId>
-  <version>${quarkus.version}</version>
-  <executions>
-    <execution>
-      <goals>
-        <goal>native-image</goal>
-      </goals>
-      <configuration>
-        <reportErrorsAtRuntime>true</reportErrorsAtRuntime>
-        <enableHttpUrlHandler>true</enableHttpUrlHandler>
-        <enableJni>true</enableJni>
-      </configuration>
-    </execution>
-  </executions>
-</plugin>
+$ kubectl get pods
+NAME                  READY   STATUS    RESTARTS   AGE
+hazelcast-cluster-0   1/1     Running   0          3h49m
+hazelcast-cluster-1   1/1     Running   0          3h49m
+hazelcast-cluster-2   1/1     Running   0          3h49m
+```
+
+Deploy Quarkus Microservice with Hazelcast Client
+```
+kubectl apply -f hazelcast-quarkus-client.yaml
+```
+Check logs and see that quarkus is connected to the cluster.
+
+```
+$ kubectl logs hazelcast-client-0 hazelcast-client -f
+...
+Members [3] {
+	Member [10.16.2.14]:5701 - 51274b4d-dc7f-4647-9ceb-c32bfc922c95
+	Member [10.16.1.15]:5701 - 465cfefa-9b26-472d-a204-addf3b82d40a
+	Member [10.16.2.15]:5701 - 67fdf27a-e7b7-4ed7-adf1-c00f785d2325
+}
+...
 ```
 
 
+let's run a container with curl installed and set an environment variable to point to Load Balancer.
 
+Launch a curl container inside kubernetes cluster and set service IP as environment variable
+```
+$ kubectl run curl --rm --image=radial/busyboxplus:curl -i --tty
+```
+
+Put a value to the cluster
+```
+$ curl "http:/quarkus-service/put?key=1&value=2"
+{"value":"2","podName":"hazelcast-embedded-2"}
+```
+Get the value from cluster in a loop and see that it is retrieved from different Pod Names.
+```
+$ while true; do curl "http:/quarkus-service/get?key=1"; sleep 2;echo; done
+{"value":"2","podName":"hazelcast-cluster-1"}
+{"value":"2","podName":"hazelcast-cluster-0"}
+...
+```
+In this sample, you were able to deploy a quarkus based microservice with hazelcast client-server topology and deployed to Kubernetes. Let's clean up deployments with the following command.
+
+```
+$ kubectl delete -f hazelcast-quarkus-client.yaml
+$ kubectl delete -f hazelcast-cluster.yaml
+$ kubectl delete -f rbac.yaml
+```
