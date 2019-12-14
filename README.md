@@ -1,7 +1,6 @@
 # Hazelcast and Quarkus
 
-This guide helps you start with Hazelcast in Quarkus based Microservice and deploy to Kubernetes. 
-Feel free to fork and experiment on your own
+This guide helps you start with [Hazelcast](https://github.com/hazelcast/hazelcast) in [Quarkus](https://github.com/quarkusio/quarkus) based Microservice and deploy to Kubernetes. Feel free to fork and experiment on your own.
 
 ## Requirements
 
@@ -23,16 +22,33 @@ $ kubectl apply -f rbac.yaml
 This guide contains a basic Quarkus Microservice with Hazelcast Client Server Topology. 
 Business Logic in both examples are the same to keep it simple. `put` operation puts a key-value pair to Hazelcast and `get` operation returns the value together with the Kubernetes Pod Name. PodName is used to show that the value is returned from any Pod inside the Kubernetes cluster to prove the true nature of Distributed Cache.
 
-### Hazelcast Client Server
+### Microservice Docker Images
 
-Client-Server code sample can be built and pushed to your own Docker Hub or some other registry via following command but that is optional.
-If you decide to build your own image then you should update `hazelcast-quarkus-client.yaml` file with `YOUR-NAME/hazelcast-quarkus-kubernetes` as a new image.
+Microservice that is available in this repository can be built and pushed to your own Docker Hub or some other registry via following commands but that is optional. *Currently, there is a an [issue](https://github.com/hazelcast/hazelcast-kubernetes/issues/181) with Hazelcast Kubernetes Discovery in GraalVM so please use executable jar based docker image.*
+
+#### Docker Image based on Executable Jar
 ```
+$ mvn clean package
 $ docker build . -t YOUR-NAME/hazelcast-quarkus-kubernetes
 $ docker login
 $ docker push YOUR-NAME/hazelcast-quarkus-kubernetes
 ```
-Pre-built image used in this guide is located [here](https://hub.docker.com/r/mesut/hazelcast-quarkus-kubernetes)
+
+#### Docker Image based on GraalVM 
+```
+$ mvn clean package -Pnative -Dnative-image.docker-build=true
+$ docker build . -t YOUR-NAME/hazelcast-quarkus-kubernetes-native
+$ docker login
+$ docker push YOUR-NAME/hazelcast-quarkus-kubernetes-native
+```
+#### Pre-built Images
+
+Pre-built images used in this guide are as follows. As mentioned above, there is an [issue](https://github.com/hazelcast/hazelcast-kubernetes/issues/181) with Native Image so please use executable jar based image.
+
+1. [Hazelcast and Quarkus Executable Jar Image](https://hub.docker.com/r/mesut/hazelcast-quarkus-kubernetes)
+2. [Hazelcast and Quarkus Native Executable Image](https://hub.docker.com/r/mesut/hazelcast-quarkus-kubernetes-native)
+
+### Deploy to kubernetes
 
 Deploy Hazelcast Cluster
 ```
@@ -65,7 +81,6 @@ Members [3] {
 }
 ...
 ```
-
 
 let's run a container with curl installed and set an environment variable to point to Load Balancer.
 
