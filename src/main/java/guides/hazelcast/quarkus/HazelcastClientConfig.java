@@ -6,18 +6,16 @@ import com.hazelcast.core.HazelcastInstance;
 
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.Produces;
-import javax.inject.Singleton;
 
 @ApplicationScoped
 public class HazelcastClientConfig {
 
 
     @Produces
-    @Singleton
     HazelcastInstance createInstance() {
         ClientConfig clientConfig = new ClientConfig();
         clientConfig.getNetworkConfig().getKubernetesConfig().setEnabled(true);
-        clientConfig.getNetworkConfig().getKubernetesConfig().setProperty("service-name","hazelcast-cluster");
+        clientConfig.getNetworkConfig().getKubernetesConfig().setProperty("service-name","hz-hazelcast-enterprise");
         return HazelcastClient.newHazelcastClient(clientConfig);
     }
 }

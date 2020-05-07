@@ -9,7 +9,7 @@ data:
         join:
           kubernetes:
             enabled: true
-            service-name: hazelcast-cluster
+            service-name: hz-hazelcast-enterprise
           multicast:
             enabled: false
 
@@ -20,7 +20,7 @@ kind: StatefulSet
 metadata:
   name: hazelcast-cluster
 spec:
-  serviceName: hazelcast-cluster
+  serviceName: hz-hazelcast-enterprise
   replicas: 3
   selector:
     matchLabels:
@@ -51,7 +51,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: hazelcast-cluster
+  name: hz-hazelcast-enterprise
 spec:
   type: ClusterIP
   clusterIP: None

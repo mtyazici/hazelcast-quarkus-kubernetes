@@ -10,13 +10,14 @@ public class CommandResponse {
     }
 
     public CommandResponse(String value, String podName) {
-        this.value  = value;
+        this.value = value;
         this.podName = podName;
     }
 
     public String getValue() {
         return value;
     }
+
     public String getPodName() {
         return podName;
     }
