@@ -13,6 +13,7 @@ spec:
       labels:
         app: hazelcast-client
     spec:
+      serviceAccountName: hazelcast-enterprise-operator
       containers:
         - name: hazelcast-client
           image: <--- HZ_QUARKUS_CLIENT_IMAGE --->
