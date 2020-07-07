@@ -8,9 +8,12 @@
   <properties>
     <surefire-plugin.version>2.22.1</surefire-plugin.version>
     <quarkus.version>1.4.2.Final</quarkus.version>
+    <quarkus.hazelcast-client.version>1.4.2.Final</quarkus.hazelcast-client.version>
+    <hazelcast.kubernetes.version>2.0.1</hazelcast.kubernetes.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>1.8</maven.compiler.target>
+
   </properties>
   <dependencyManagement>
     <dependencies>
@@ -27,12 +30,12 @@
     <dependency>
       <groupId>com.hazelcast</groupId>
       <artifactId>quarkus-hazelcast-client</artifactId>
-      <version>1.0.0-RC3</version>
+      <version>$(quarkus.hazelcast-client.version)</version>
     </dependency>
     <dependency>
       <groupId>com.hazelcast</groupId>
       <artifactId>hazelcast-kubernetes</artifactId>
-      <version>2.0.1</version>
+      <version>$(hazelcast.kubernetes.version)</version>
     </dependency>
      <dependency>
       <groupId>io.quarkus</groupId>
