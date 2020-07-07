@@ -1,0 +1,214 @@
+
+:github-address: https://github.com/mtyazici/hazelcast-quarkus-kubernetes
+:templates-url: https://raw.githubusercontent.com/hazelcast-guides/adoc-templates/master
+:hazelcast: Hazelcast IMDG
+:framework: Quarkus
+
+
+= Getting Started with Hazelcast using Quarkus in Kubernetes
+
+This guide helps you start with Hazelcast in Quarkus based Microservice and deploy into Kubernetes
+
+https://raw.githubusercontent.com/hazelcast-guides/adoc-templates/master/link-to-repo.adoc
+
+== What You’ll Learn
+
+In this guide, you will deploy a Hazelcast cluster and Quarkus application using Hazelcast client into a Kubernetes cluster. Hazelcast cluster members will automatically discover each other using https://github.com/hazelcast/hazelcast-kubernetes[Hazelcast Kubernetes discovery plugin]. Quarkus client applications will also find Hazelcast cluster members using Hazelcast `HazelcastClientConfig` class.
+
+== Prerequisites
+
+ -   ~15 minutes
+
+ -   Docker (Docker for Desktop is good enough)
+
+ -   Kubernetes cluster (Docker for Desktop or Minikube is good enough)
+
+  -  JDK 1.8+
+
+  -  Apache Maven 3.2+
+
+  - Helm 3.0+
+
+== About Deploying the Application to Kubernetes
+
+We will take the application that we built on https://github.com/hazelcast-guides/hazelcast-quarkus[Hazelcast and Quarkus] and deploy it on Kubernetes. This repository has the updated version of that application.
+
+First in the code we change the `HazelcastClientConfig` class to find cluster members on Kubernetes as follows:
+
+[source,java]
+----
+@ApplicationScoped
+public class HazelcastClientConfig {
+    @Produces
+    @Singleton
+    HazelcastInstance createInstance() {
+        ClientConfig clientConfig = new ClientConfig();
+        clientConfig.getNetworkConfig().getKubernetesConfig().setEnabled(true);
+        clientConfig.getNetworkConfig().getKubernetesConfig().setProperty("service-name","hazelcast-cluster");
+        return HazelcastClient.newHazelcastClient(clientConfig);
+    }
+}
+----
+We also create following file to deploy the application into kubernetes.
+
+`hazelcast-quarkus-client.yaml` creates two Quarkus applications which are clients for Hazelcast cluster and a service for users to manipulate data.
+
+We will use `helm` to deploy hazelcast clusters.
+
+== Create a Docker Image
+
+
+For minikube, you can run the following command and the `docker build` will create the image in the minikube.
+
+----
+$ eval $(minikube docker-env)
+----
+
+This code points docker to docker daemon inside the minikube instead of the host docker daemon. Remember this is only valid for the shell that ran the commmand.
+
+At this point it is assumed you are in the project directory.
+
+Pushing the image to a registry is optional but otherwise make sure image is present in the kubernetes environment.
+
+=== Docker Image based on Executable Jar
+
+[source,shell script]
+----
+$ mvn clean package
+$ docker build . -t YOUR-NAME/hazelcast-quarkus-kubernetes
+$ docker login
+$ docker push YOUR-NAME/hazelcast-quarkus-kubernetes
+----
+
+=== Docker Image based on GraalVM
+
+[source,shell script]
+----
+$ mvn clean package -Pnative -Dnative-image.docker-build=true
+$ docker build . -t YOUR-NAME/hazelcast-quarkus-kubernetes-native
+$ docker login
+$ docker push YOUR-NAME/hazelcast-quarkus-kubernetes-native
+----
+
+If you change `YOUR-NAME` to your docker hub repository, make sure in the `hazelcast-quarkus-client.yaml` file you change the following part:
+[source,yaml]
+----
+...
+      containers:
+        - name: hazelcast-client
+          image: YOUR-NAME/hazelcast-quarkus-kubernetes
+          imagePullPolicy: IfNotPresent
+...
+----
+
+=== Pre-built Images
+
+Pre-built images used in this guide are available for your convenience:
+
+- Jar Image
+- Native Executable Image
+
+
+== Configure RBAC
+
+https://github.com/hazelcast/hazelcast-kubernetes[Hazelcast Kubernetes discovery plugin] makes calls to Kubernetes API to provide automatic member discovery. Therefore, it needs to have specific ClusterRole rules granted. You can apply the minimal RBAC configuration (for the `default` service account in the `default` namespace) with the following command.
+
+By this time make sure you have your kubernetes environment running.
+[source,shell script]
+----
+kubectl apply -f rbac.yaml
+----
+
+Note that:
+
+- If you use service account other than `default` or namespace other than `default`, you need to modify `rbac.yaml` file.
+- If your Kubernetes cluster does not use RBAC, you can skip the "Configure RBAC" step
+
+== Deploy the Hazelcast Cluster to Kubernetes
+
+Deploy Hazelcast cluster
+
+[source,shell script]
+----
+helm repo add hazelcast https://hazelcast-charts.s3.amazonaws.com/
+helm repo update
+helm install hazelcast-cluster \
+         --set cluster.memberCount=3\
+         --set service.name=hazelcast-cluster\
+         --set mancenter.enabled=false\
+         hazelcast/hazelcast
+----
+These commands will download the charts from the repo and create the deployments in the kubernetes cluster.
+
+You can see that 3 member cluster has been initiated with 3 pods.
+
+[source,shell script]
+----
+$ kubectl get pods
+NAME                  READY   STATUS    RESTARTS   AGE
+hazelcast-cluster-0   1/1     Running   0          3h49m
+hazelcast-cluster-1   1/1     Running   0          3h49m
+hazelcast-cluster-2   1/1     Running   0          3h49m
+----
+
+== Deploy Quarkus Application to Kubernetes
+
+[source,shell script]
+----
+kubectl apply -f hazelcast-quarkus-client.yaml
+----
+
+== Testing the Application
+Launch a curl container inside kubernetes cluster. This will create a interactable shell.
+
+[source,shell script]
+----
+$ kubectl run curl --rm --image=radial/busyboxplus:curl -i --tty
+----
+
+Put a value to the cluster
+
+[source,shell script]
+----
+$ curl -X POST "http://quarkus-service/hazelcast/put?key=1&value=2"
+{"value":"2","podName":"hazelcast-embedded-2"}
+----
+
+Get the value from cluster in a loop and see that it is retrieved from different Pod Names.
+
+[source,shell script]
+----
+$ while true; do curl "http://quarkus-service/hazelcast/get?key=1"; sleep 2;echo; done
+{"value":"2","podName":"hazelcast-cluster-1"}
+{"value":"2","podName":"hazelcast-cluster-0"}
+...
+----
+
+You can stop the command by `CTRL + C` and exit the shell by typing `exit`.
+
+== Tearing Down the Application
+To delete all Kubernetes resources you created, run the following commands.
+
+[source,shell script]
+----
+$ kubectl delete -f hazelcast-quarkus-client.yaml
+$ helm delete hazelcast-cluster
+$ kubectl delete -f rbac.yaml
+----
+
+== Summary
+
+In this guide, we bootstrapped a native-image-ready Quarkus application which uses Hazelcast Client and deployed it to Kubernetes.
+
+== See Also
+
+
+- https://github.com/hazelcast-guides/caching-springboot-microservices-on-kubernetes[Caching SpringBoot Microservices with Hazelcast in Kubernetes]
+- https://github.com/hazelcast-guides/caching-micronaut-microservices-on-kubernetes[Caching Micronaut microservices on Kubernetes using Hazelcast]
+- https://github.com/hazelcast-guides/hazelcast-embedded-springboot[Hazelcast Embedded Spring Boot]
+
+
+
+
+
+
